@@ -8,20 +8,24 @@ using System.Threading.Tasks;
 using Windows.UI.Composition;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Hosting;
+using Windows.UI.Xaml.Media;
 
 namespace PullToRefreshXaml
 {
     public sealed partial class MainPage : Page
     {
         ScrollViewer _scrollViewer;
+        Compositor _compositor;
         readonly ObservableCollection<GroupInfoList> _list = Contact.GetContactsGrouped(250);
 
         CompositionPropertySet _scrollerViewerManipulation;
         ExpressionAnimation _rotationAnimation, _opacityAnimation, _offsetAnimation;
+        ScalarKeyFrameAnimation _resetAnimation, _loadingAnimation;
 
+        Visual _borderVisual;
         Visual _refreshIconVisual;
         float _refreshIconOffsetY;
-        const float REFRESH_ICON_MAX_OFFSET_Y = 12.0f;
+        const float REFRESH_ICON_MAX_OFFSET_Y = 36.0f;
 
         bool _refresh;
         DateTime _pulledDownTime, _restoredTime;
@@ -39,7 +43,7 @@ namespace PullToRefreshXaml
 
                 // Retrieve the ScrollViewer manipulation and the Compositor.
                 _scrollerViewerManipulation = ElementCompositionPreview.GetScrollViewerManipulationPropertySet(_scrollViewer);
-                var compositor = _scrollerViewerManipulation.Compositor;
+                _compositor = _scrollerViewerManipulation.Compositor;
 
                 // At the moment there are three things happening when pulling down the list -
                 // 1. The Refresh Icon fades in.
@@ -50,31 +54,42 @@ namespace PullToRefreshXaml
                 //
 
                 // Create a rotation expression animation based on the overpan distance of the ScrollViewer.
-                _rotationAnimation = compositor.CreateExpressionAnimation("min(max(0, ScrollManipulation.Translation.Y) * Multiplier, MaxDegree)");
+                _rotationAnimation = _compositor.CreateExpressionAnimation("min(max(0, ScrollManipulation.Translation.Y) * Multiplier, MaxDegree)");
                 _rotationAnimation.SetScalarParameter("Multiplier", 10.0f);
                 _rotationAnimation.SetScalarParameter("MaxDegree", 400.0f);
                 _rotationAnimation.SetReferenceParameter("ScrollManipulation", _scrollerViewerManipulation);
 
                 // Create an opacity expression animation based on the overpan distance of the ScrollViewer.
-                _opacityAnimation = compositor.CreateExpressionAnimation("min(max(0, ScrollManipulation.Translation.Y) / Divider, 1)");
+                _opacityAnimation = _compositor.CreateExpressionAnimation("min(max(0, ScrollManipulation.Translation.Y) / Divider, 1)");
                 _opacityAnimation.SetScalarParameter("Divider", 30.0f);
                 _opacityAnimation.SetReferenceParameter("ScrollManipulation", _scrollerViewerManipulation);
 
                 // Create an offset expression animation based on the overpan distance of the ScrollViewer.
-                _offsetAnimation = compositor.CreateExpressionAnimation("(min(max(0, ScrollManipulation.Translation.Y) / Divider, 1)) * MaxOffsetY");
+                _offsetAnimation = _compositor.CreateExpressionAnimation("(min(max(0, ScrollManipulation.Translation.Y) / Divider, 1)) * MaxOffsetY");
                 _offsetAnimation.SetScalarParameter("Divider", 30.0f);
                 _offsetAnimation.SetScalarParameter("MaxOffsetY", REFRESH_ICON_MAX_OFFSET_Y);
                 _offsetAnimation.SetReferenceParameter("ScrollManipulation", _scrollerViewerManipulation);
 
+                // Create a keyframe animation to reset properties like Offset.Y, Opacity, etc.
+                _resetAnimation = _compositor.CreateScalarKeyFrameAnimation();
+                _resetAnimation.InsertKeyFrame(1.0f, 0.0f);
+
+                // Create a loading keyframe animation (in this case, a rotation animation). 
+                _loadingAnimation = _compositor.CreateScalarKeyFrameAnimation();
+                _loadingAnimation.InsertKeyFrame(1.0f, 360);
+                _loadingAnimation.Duration = TimeSpan.FromMilliseconds(1200);
+                _loadingAnimation.IterationBehavior = AnimationIterationBehavior.Forever;
+
                 // Get the RefreshIcon's Visual.
                 _refreshIconVisual = ElementCompositionPreview.GetElementVisual(RefreshIcon);
-                // Set the center point for the rotation animation
+                // Set the center point for the rotation animation.
                 _refreshIconVisual.CenterPoint = new Vector3(Convert.ToSingle(RefreshIcon.ActualWidth / 2), Convert.ToSingle(RefreshIcon.ActualHeight / 2), 0);
 
-                // Kick off the animations.
-                _refreshIconVisual.StartAnimation("RotationAngleInDegrees", _rotationAnimation);
-                _refreshIconVisual.StartAnimation("Opacity", _opacityAnimation);
-                _refreshIconVisual.StartAnimation("Offset.Y", _offsetAnimation);
+                // Get the ListView's inner Border's Visual.
+                var border = (Border)VisualTreeHelper.GetChild(ListView, 0);
+                _borderVisual = ElementCompositionPreview.GetElementVisual(border);
+
+                PrepareExpressionAnimationsOnScroll();
             };
 
             this.Unloaded += (s, e) =>
@@ -82,6 +97,14 @@ namespace PullToRefreshXaml
                 _scrollViewer.DirectManipulationStarted -= OnDirectManipulationStarted;
                 _scrollViewer.DirectManipulationCompleted -= OnDirectManipulationCompleted;
             };
+        }
+
+        private void PrepareExpressionAnimationsOnScroll()
+        {
+            _refreshIconVisual.StartAnimation("RotationAngleInDegrees", _rotationAnimation);
+            _refreshIconVisual.StartAnimation("Opacity", _opacityAnimation);
+            _refreshIconVisual.StartAnimation("Offset.Y", _offsetAnimation);
+            _borderVisual.StartAnimation("Offset.Y", _offsetAnimation);
         }
 
         void OnDirectManipulationStarted(object sender, object e)
@@ -95,7 +118,7 @@ namespace PullToRefreshXaml
             _refresh = false;
         }
 
-        void OnDirectManipulationCompleted(object sender, object e)
+        async void OnDirectManipulationCompleted(object sender, object e)
         {
             Windows.UI.Xaml.Media.CompositionTarget.Rendering -= OnCompositionTargetRendering;
 
@@ -110,11 +133,48 @@ namespace PullToRefreshXaml
                 if (cancelled)
                 {
                     Debug.WriteLine("Refresh cancelled...");
+
+                    StartResetAnimations();
                 }
-                else {
+                else
+                {
                     Debug.WriteLine("Refresh now!!!");
+
+                    await StartLoadingAnimation(() => StartResetAnimations());
                 }
             }
+        }
+
+        async Task StartLoadingAnimation(Action completed)
+        {
+            // Create a short delay to allow the expression rotation animation to more smoothly transition
+            // to the new keyframe animation
+            await Task.Delay(100);
+
+            _refreshIconVisual.StartAnimation("RotationAngleInDegrees", _loadingAnimation);
+
+            await FakeServiceCall();
+            completed();
+        }
+
+        void StartResetAnimations()
+        {
+            var batch = _compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
+            // Looks like expression aniamtions will be removed after the following keyframe
+            // animations have run. So here I have to re-start them once the keyframe animations
+            // are completed.
+            batch.Completed += (s, e) => PrepareExpressionAnimationsOnScroll();
+
+            _borderVisual.StartAnimation("Offset.Y", _resetAnimation);
+            _refreshIconVisual.StartAnimation("Opacity", _resetAnimation);
+            batch.End();
+        }
+
+        async Task FakeServiceCall()
+        {
+            await Task.Delay(2000);
+
+            _list.Insert(0, Contact.GetContactsGrouped(1)[0]);
         }
 
         void OnCompositionTargetRendering(object sender, object e)
@@ -161,6 +221,10 @@ namespace PullToRefreshXaml
             {
                 _pulledDownTime = DateTime.Now;
                 //Debug.WriteLine($"When the list is pulled down: {_pulledDownTime}");
+
+                // Stop the Opacity animation on the RefreshIcon and the Offset.Y animation on the Border (ScrollViewer's host)
+                _refreshIconVisual.StopAnimation("Opacity");
+                _borderVisual.StopAnimation("Offset.Y");
             }
 
             if (_refresh && _refreshIconOffsetY <= 1)
