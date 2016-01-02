@@ -1,4 +1,4 @@
 # PullToRefreshXaml
 Pull to refresh with the new Windows Composition API.
 
-See it [LIVE](http://ww4.sinaimg.cn/large/6376e69egw1ezly7u4qrpg20p90uonpf.gif).
+![Pull to Refresh](http://ww4.sinaimg.cn/large/6376e69egw1ezly7u4qrpg20p90uonpf.gif).
