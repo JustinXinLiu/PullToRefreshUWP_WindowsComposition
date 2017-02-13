@@ -18,7 +18,7 @@ namespace PullToRefreshXaml
 
             RefreshCommand = new AsyncDelegateCommand<CancellationToken>(async token =>
             {
-                await Task.Delay(8000, token);
+                await Task.Delay(4000, token);
 
                 _list.Insert(0, Contact.GetContactsGrouped(1)[0]);
             });

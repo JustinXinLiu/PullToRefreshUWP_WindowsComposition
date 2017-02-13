@@ -153,7 +153,8 @@ namespace PullToRefreshXaml
 
             // Create a loading keyframe animation (in this case, a rotation animation). 
             _loadingAnimation = _compositor.CreateScalarKeyFrameAnimation();
-            _loadingAnimation.InsertKeyFrame(1.0f, 360);
+            _loadingAnimation.InsertExpressionKeyFrame(0.0f, "this.StartingValue");
+            _loadingAnimation.InsertExpressionKeyFrame(1.0f, "this.StartingValue + 360");
             _loadingAnimation.Duration = TimeSpan.FromMilliseconds(1200);
             _loadingAnimation.IterationBehavior = AnimationIterationBehavior.Forever;
 
@@ -322,15 +323,7 @@ namespace PullToRefreshXaml
             {
             }
 
-            //token.ThrowIfCancellationRequested();
-
-            if (_cts.IsCancellationRequested)
-            {
-                //_refreshIconVisual.StopAnimation("RotationAngleInDegrees");
-                await Task.Delay(1200);
-
-                _refreshIconVisual.StartAnimation("RotationAngleInDegrees", _loadingAnimation);
-            }
+            token.ThrowIfCancellationRequested();
 
             if (RefreshCommand != null && RefreshCommand.CanExecute(token, true))
             {
