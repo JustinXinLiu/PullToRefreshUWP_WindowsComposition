@@ -1,34 +1,35 @@
-﻿using Windows.UI.Xaml;
+﻿using System;
+using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Media;
 
-namespace PullToRefreshXaml.Extensions
+namespace PullToRefreshXaml
 {
     public static class Extensions
     {
         public static ScrollViewer GetScrollViewer(this DependencyObject element)
         {
-            if (element is ScrollViewer)
+            var scrollViewer = element as ScrollViewer;
+
+            if (scrollViewer != null)
             {
-                return (ScrollViewer)element;
+                return scrollViewer;
             }
 
-            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
+            for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
             {
                 var child = VisualTreeHelper.GetChild(element, i);
 
                 var result = GetScrollViewer(child);
-                if (result == null)
-                {
-                    continue;
-                }
-                else
-                {
-                    return result;
-                }
+                if (result == null) continue;
+
+                return result;
             }
 
             return null;
         }
+
+        public static bool AlmostEqual(this float x, double y, double tolerance = 0.01) => 
+            Math.Abs(x - y) < tolerance;
     }
 }

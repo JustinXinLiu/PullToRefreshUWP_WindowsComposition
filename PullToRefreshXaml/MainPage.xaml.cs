@@ -1,5 +1,4 @@
-﻿using PullToRefreshXaml.Extensions;
-using PullToRefreshXaml.Model;
+﻿using PullToRefreshXaml.Model;
 using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
