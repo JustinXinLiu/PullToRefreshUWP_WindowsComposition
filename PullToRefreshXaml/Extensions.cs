@@ -9,9 +9,7 @@ namespace PullToRefreshXaml
     {
         public static ScrollViewer GetScrollViewer(this DependencyObject element)
         {
-            var scrollViewer = element as ScrollViewer;
-
-            if (scrollViewer != null)
+            if (element is ScrollViewer scrollViewer)
             {
                 return scrollViewer;
             }
@@ -29,7 +27,7 @@ namespace PullToRefreshXaml
             return null;
         }
 
-        public static bool AlmostEqual(this float x, double y, double tolerance = 0.01) => 
+        public static bool AlmostEqual(this float x, double y, double tolerance = 0.01) =>
             Math.Abs(x - y) < tolerance;
     }
 }

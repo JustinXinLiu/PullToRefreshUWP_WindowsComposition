@@ -1,4 +1,4 @@
-﻿<Page x:Class="PullToRefreshXaml.MainPage_WithBehavior"
+﻿<Page x:Class="PullToRefreshXaml.MainPageBottomUp"
       xmlns:data="using:PullToRefreshXaml.Model"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -9,11 +9,9 @@
       mc:Ignorable="d">
 
     <Page.Resources>
-        <CollectionViewSource x:Name="ContactsCVS"
-                              IsSourceGrouped="True" />
+        <CollectionViewSource x:Name="ContactsCVS" IsSourceGrouped="True" />
 
-        <DataTemplate x:Name="ContactListViewTemplate"
-                      x:DataType="data:Contact">
+        <DataTemplate x:Name="ContactListViewTemplate" x:DataType="data:Contact">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*" />
@@ -51,8 +49,17 @@
                   ItemsSource="{x:Bind ContactsCVS.View}"
                   ItemTemplate="{StaticResource ContactListViewTemplate}">
             <Interactivity:Interaction.Behaviors>
-                <local:PullToRefreshBehavior IconElement="{x:Bind RefreshIcon}" RefreshCommand="{x:Bind RefreshCommand}" />
+                <local:PullToRefreshBehavior IconElement="{x:Bind RefreshIcon}"
+                                             RefreshCommand="{x:Bind RefreshCommand}"
+                                             PullDirection="BottomUp" />
             </Interactivity:Interaction.Behaviors>
+
+            <ListView.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <ItemsStackPanel ItemsUpdatingScrollMode="KeepLastItemInView"
+                                     VerticalAlignment="Bottom" />
+                </ItemsPanelTemplate>
+            </ListView.ItemsPanel>
 
             <ListView.GroupStyle>
                 <GroupStyle>
@@ -65,10 +72,18 @@
                 </GroupStyle>
             </ListView.GroupStyle>
         </ListView>
-        <SymbolIcon x:Name="RefreshIcon"
-                    VerticalAlignment="Top"
-                    Width="48"
-                    Height="48"
-                    Symbol="Refresh" />
+
+        <Border Width="24"
+                Height="24"
+                Margin="0,16,0,0"
+                VerticalAlignment="Top"
+                HorizontalAlignment="Center">
+            <Path x:Name="RefreshIcon"
+                  Data="M2.7499252,30.299848L18.669936,37.698865 14.349932,40.728464C17.789935,43.70807 22.169938,45.567823 26.799941,45.567823 35.689946,45.567823 43.469952,39.758592 45.309953,31.289716L45.599953,30.639802 53.339959,30.639802 52.979958,31.949628C50.759957,44.417974 39.749951,52.776868 26.799941,52.776868 19.539937,52.776868 12.809932,49.897249 7.8799284,44.937906L4.2499259,47.387582z M26.539532,0C33.809293,-6.8510417E-08,40.529256,2.7602325,45.459096,7.7205935L49.089028,5.050457 50.589001,21.701824 34.669381,15.291273 38.989247,12.360982C35.549249,9.3807617 31.16945,7.7306042 26.539532,7.7306042 17.649688,7.7306042 9.8698071,13.921167 8.0298765,22.401832L7.7398427,23.832002 0,23.832002 0.3599781,21.681804C2.5799068,9.2108264,13.589706,-6.8510417E-08,26.539532,0z"
+                  Stretch="Fill"
+                  Fill="LightGreen"
+                  Width="48"
+                  Height="48" />
+        </Border>
     </Grid>
 </Page>

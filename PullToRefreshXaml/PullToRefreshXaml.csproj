@@ -97,8 +97,11 @@
     </Compile>
     <Compile Include="AsyncDelegateCommand.cs" />
     <Compile Include="Extensions.cs" />
-    <Compile Include="MainPage_WithBehavior.xaml.cs">
-      <DependentUpon>MainPage_WithBehavior.xaml</DependentUpon>
+    <Compile Include="MainPageTopDown.xaml.cs">
+      <DependentUpon>MainPageTopDown.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="MainPageBottomUp.xaml.cs">
+      <DependentUpon>MainPageBottomUp.xaml</DependentUpon>
     </Compile>
     <Compile Include="MainPage.xaml.cs">
       <DependentUpon>MainPage.xaml</DependentUpon>
@@ -130,7 +133,11 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </ApplicationDefinition>
-    <Page Include="MainPage_WithBehavior.xaml">
+    <Page Include="MainPageTopDown.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="MainPageBottomUp.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

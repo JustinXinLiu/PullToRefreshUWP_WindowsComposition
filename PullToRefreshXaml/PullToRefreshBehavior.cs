@@ -34,6 +34,8 @@ namespace PullToRefreshXaml
         private Task _pendingRefreshTask;
         private CancellationTokenSource _cts;
 
+        private long _callbackId;
+
         #endregion
 
         #region Properties
@@ -45,12 +47,12 @@ namespace PullToRefreshXaml
         }
         public static readonly DependencyProperty IconElementProperty = DependencyProperty.Register("IconElement", typeof(FrameworkElement), typeof(PullToRefreshBehavior), new PropertyMetadata(null));
 
-        public double IconElementMaxOffsetY
+        public double IconElementMaxPulledDistance
         {
-            get { return (double)GetValue(IconElementMaxOffsetYProperty); }
-            set { SetValue(IconElementMaxOffsetYProperty, value); }
+            get { return (double)GetValue(IconElementMaxPulledDistanceProperty); }
+            set { SetValue(IconElementMaxPulledDistanceProperty, value); }
         }
-        public static readonly DependencyProperty IconElementMaxOffsetYProperty = DependencyProperty.Register("IconElementMaxOffsetY", typeof(double), typeof(PullToRefreshBehavior), new PropertyMetadata(36.0d));
+        public static readonly DependencyProperty IconElementMaxPulledDistanceProperty = DependencyProperty.Register("IconElementMaxPulledDistance", typeof(double), typeof(PullToRefreshBehavior), new PropertyMetadata(36.0d));
 
         public double IconElementMaxRotationAngle
         {
@@ -59,12 +61,32 @@ namespace PullToRefreshXaml
         }
         public static readonly DependencyProperty IconElementMaxRotationAngleProperty = DependencyProperty.Register("IconElementMaxRotationAngle", typeof(double), typeof(PullToRefreshBehavior), new PropertyMetadata(400.0d));
 
+        public double PullThreshold
+        {
+            get { return (double)GetValue(PullThresholdProperty); }
+            set { SetValue(PullThresholdProperty, value); }
+        }
+        public static readonly DependencyProperty PullThresholdProperty = DependencyProperty.Register("PullThreshold", typeof(double), typeof(PullToRefreshBehavior), new PropertyMetadata(44.0d));
+
         public AsyncDelegateCommand<CancellationToken> RefreshCommand
         {
             get { return (AsyncDelegateCommand<CancellationToken>)GetValue(RefreshCommandProperty); }
             set { SetValue(RefreshCommandProperty, value); }
         }
         public static readonly DependencyProperty RefreshCommandProperty = DependencyProperty.Register("RefreshCommand", typeof(AsyncDelegateCommand<CancellationToken>), typeof(PullToRefreshBehavior), new PropertyMetadata(null));
+
+        public PullDirection PullDirection
+        {
+            get { return (PullDirection)GetValue(PullDirectionProperty); }
+            set { SetValue(PullDirectionProperty, value); }
+        }
+        public static readonly DependencyProperty PullDirectionProperty = DependencyProperty.Register("PullDirection", typeof(PullDirection), typeof(PullToRefreshBehavior), new PropertyMetadata(PullDirection.TopDown));
+
+        private float IconElementMaxPulledOffsetY
+            => (float)IconElementMaxPulledDistance * (PullDirection == PullDirection.TopDown ? 1 : -1);
+
+        private string PullDistanceExpression =>
+            $"max(0, {(PullDirection == PullDirection.TopDown ? string.Empty : "-")}ScrollManipulation.Translation.Y{(PullDirection == PullDirection.TopDown ? string.Empty : " -ScrollManipulation.ScrollableHeight")})";
 
         #endregion
 
@@ -117,6 +139,8 @@ namespace PullToRefreshXaml
             _scrollViewer = AssociatedObject.GetScrollViewer();
             _scrollViewer.DirectManipulationStarted += OnScrollViewerDirectManipulationStarted;
             _scrollViewer.DirectManipulationCompleted += OnScrollViewerDirectManipulationCompleted;
+            _callbackId = _scrollViewer.RegisterPropertyChangedCallback(ScrollViewer.ScrollableHeightProperty,
+                OnScrollViewerScrollableHeightChanged);
 
             // Retrieve the ScrollViewer manipulation and the Compositor.
             _scrollerViewerManipulation = ElementCompositionPreview.GetScrollViewerManipulationPropertySet(_scrollViewer);
@@ -125,26 +149,28 @@ namespace PullToRefreshXaml
             // At the moment there are three things happening when pulling down the list -
             // 1. The Refresh Icon fades in.
             // 2. The Refresh Icon rotates (IconElementMaxRotationAngle).
-            // 3. The Refresh Icon gets pulled down a bit (IconElementMaxOffsetY)
+            // 3. The Refresh Icon gets pulled down/up a bit (IconElementMaxOffsetY)
             // QUESTION 5
             // Can we also have Geometric Path animation so we can also draw the Refresh Icon along the way?
             //
 
+            UpdateScrollableHeightInScrollViewerPropertySet();
+
             // Create a rotation expression animation based on the overpan distance of the ScrollViewer.
-            _rotationAnimation = _compositor.CreateExpressionAnimation("min(max(0, ScrollManipulation.Translation.Y) * Multiplier, MaxDegree)");
-            _rotationAnimation.SetScalarParameter("Multiplier", 10.0f);
+            _rotationAnimation = _compositor.CreateExpressionAnimation($"min({PullDistanceExpression} * DegreeMultiplier, MaxDegree)");
+            _rotationAnimation.SetScalarParameter("DegreeMultiplier", 10.0f);
             _rotationAnimation.SetScalarParameter("MaxDegree", (float)IconElementMaxRotationAngle);
             _rotationAnimation.SetReferenceParameter("ScrollManipulation", _scrollerViewerManipulation);
 
             // Create an opacity expression animation based on the overpan distance of the ScrollViewer.
-            _opacityAnimation = _compositor.CreateExpressionAnimation("min(max(0, ScrollManipulation.Translation.Y) / DividedBy, 1)");
-            _opacityAnimation.SetScalarParameter("DividedBy", 30.0f);
+            _opacityAnimation = _compositor.CreateExpressionAnimation($"min({PullDistanceExpression} / PullThreshold, 1)");
+            _opacityAnimation.SetScalarParameter("PullThreshold", (float)PullThreshold);
             _opacityAnimation.SetReferenceParameter("ScrollManipulation", _scrollerViewerManipulation);
 
             // Create an offset expression animation based on the overpan distance of the ScrollViewer.
-            _offsetAnimation = _compositor.CreateExpressionAnimation("(min(max(0, ScrollManipulation.Translation.Y) / DividedBy, 1)) * MaxOffsetY");
-            _offsetAnimation.SetScalarParameter("DividedBy", 30.0f);
-            _offsetAnimation.SetScalarParameter("MaxOffsetY", (float)IconElementMaxOffsetY);
+            _offsetAnimation = _compositor.CreateExpressionAnimation($"(min({PullDistanceExpression} / PullThreshold, 1)) * MaxPulledDistance");
+            _offsetAnimation.SetScalarParameter("PullThreshold", (float)PullThreshold);
+            _offsetAnimation.SetScalarParameter("MaxPulledDistance", IconElementMaxPulledOffsetY);
             _offsetAnimation.SetReferenceParameter("ScrollManipulation", _scrollerViewerManipulation);
 
             // Create a keyframe animation to reset properties like Offset.Y, Opacity, etc.
@@ -161,7 +187,7 @@ namespace PullToRefreshXaml
             // Get the RefreshIcon's Visual.
             _refreshIconVisual = ElementCompositionPreview.GetElementVisual(IconElement);
             // Set the center point for the rotation animation.
-            _refreshIconVisual.CenterPoint = new Vector3(Convert.ToSingle(IconElement.ActualWidth / 2), Convert.ToSingle(IconElement.ActualHeight / 2), 0);
+            _refreshIconVisual.CenterPoint = new Vector3(IconElement.RenderSize.ToVector2() / 2, 0.0f);
 
             // Get the ListView's inner Border's Visual.
             var border = (Border)VisualTreeHelper.GetChild(AssociatedObject, 0);
@@ -172,9 +198,13 @@ namespace PullToRefreshXaml
 
         private void OnAssociatedObjectUnloaded(object sender, RoutedEventArgs e)
         {
+            _scrollViewer.UnregisterPropertyChangedCallback(ScrollViewer.ScrollableHeightProperty, _callbackId);
             _scrollViewer.DirectManipulationStarted -= OnScrollViewerDirectManipulationStarted;
             _scrollViewer.DirectManipulationCompleted -= OnScrollViewerDirectManipulationCompleted;
         }
+
+        private void OnScrollViewerScrollableHeightChanged(DependencyObject sender, DependencyProperty dp) =>
+            UpdateScrollableHeightInScrollViewerPropertySet();
 
         private void OnScrollViewerDirectManipulationStarted(object sender, object e)
         {
@@ -248,10 +278,10 @@ namespace PullToRefreshXaml
             // 
             if (!_refresh)
             {
-                _refresh = _refreshIconOffsetY.AlmostEqual(IconElementMaxOffsetY);
+                _refresh = _refreshIconOffsetY.AlmostEqual(IconElementMaxPulledOffsetY);
             }
 
-            if (_refreshIconOffsetY.AlmostEqual(IconElementMaxOffsetY))
+            if (_refreshIconOffsetY.AlmostEqual(IconElementMaxPulledOffsetY))
             {
                 _pulledDownTime = DateTime.Now;
                 //Debug.WriteLine($"When the list is pulled down: {_pulledDownTime}");
@@ -282,10 +312,18 @@ namespace PullToRefreshXaml
             _borderVisual.StartAnimation("Offset.Y", _offsetAnimation);
         }
 
+        private void StopExpressionAnimations()
+        {
+            _refreshIconVisual.StopAnimation("RotationAngleInDegrees");
+            _refreshIconVisual.StopAnimation("Opacity");
+            _refreshIconVisual.StopAnimation("Offset.Y");
+            _borderVisual.StopAnimation("Offset.Y");
+        }
+
         private async Task StartLoadingAnimationAndRequestRefreshAsync(Action completed)
         {
             // Create a short delay to allow the expression rotation animation to more smoothly transition
-            // to the new keyframe animation
+            // to the new keyframe animation.
             await Task.Delay(100);
 
             _refreshIconVisual.StartAnimation("RotationAngleInDegrees", _loadingAnimation);
@@ -333,6 +371,8 @@ namespace PullToRefreshXaml
 
         private void StartResetAnimations()
         {
+            StopExpressionAnimations();
+
             var batch = _compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
             // Looks like expression aniamtions will be removed after the following keyframe
             // animations have run. So here I have to re-start them once the keyframe animations
@@ -341,9 +381,24 @@ namespace PullToRefreshXaml
 
             _borderVisual.StartAnimation("Offset.Y", _resetAnimation);
             _refreshIconVisual.StartAnimation("Opacity", _resetAnimation);
+
             batch.End();
         }
 
+        private void UpdateScrollableHeightInScrollViewerPropertySet()
+        {
+            if (PullDirection == PullDirection.BottomUp)
+            {
+                _scrollerViewerManipulation.InsertScalar("ScrollableHeight", (float)_scrollViewer.ScrollableHeight);
+            }
+        }
+
         #endregion
+    }
+
+    public enum PullDirection
+    {
+        TopDown,
+        BottomUp
     }
 }

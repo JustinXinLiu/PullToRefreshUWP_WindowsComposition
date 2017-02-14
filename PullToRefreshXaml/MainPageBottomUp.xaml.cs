@@ -7,20 +7,20 @@ using Windows.UI.Xaml.Controls;
 
 namespace PullToRefreshXaml
 {
-    public sealed partial class MainPage_WithBehavior : Page
+    public sealed partial class MainPageBottomUp : Page
     {
         private readonly ObservableCollection<GroupInfoList> _list = Contact.GetContactsGrouped(250);
 
-        public MainPage_WithBehavior()
+        public MainPageBottomUp()
         {
             InitializeComponent();
             ContactsCVS.Source = _list;
 
             RefreshCommand = new AsyncDelegateCommand<CancellationToken>(async token =>
             {
-                await Task.Delay(4000, token);
-
-                _list.Insert(0, Contact.GetContactsGrouped(1)[0]);
+                await Task.Delay(2000, token);
+                
+                _list.Add(Contact.GetContactsGrouped(1)[0]);
             });
         }
 
