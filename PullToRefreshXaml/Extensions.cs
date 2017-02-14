@@ -27,7 +27,7 @@ namespace PullToRefreshXaml
             return null;
         }
 
-        public static bool AlmostEqual(this float x, double y, double tolerance = 0.01) =>
+        public static bool AlmostEqual(this float x, float y, float tolerance = 0.01f) =>
             Math.Abs(x - y) < tolerance;
     }
 }
