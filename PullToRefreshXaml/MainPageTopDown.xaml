@@ -50,7 +50,7 @@
                   ItemTemplate="{StaticResource ContactListViewTemplate}">
             <Interactivity:Interaction.Behaviors>
                 <local:PullToRefreshBehavior IconElement="{x:Bind RefreshIcon}"
-                                             RefreshCommand="{x:Bind RefreshCommand}" />
+                                             RefreshRequested="OnRefreshRequested" />
             </Interactivity:Interaction.Behaviors>
 
             <ListView.GroupStyle>

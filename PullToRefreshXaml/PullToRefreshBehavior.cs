@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.ApplicationModel;
+using Windows.Foundation;
 using Windows.UI.Composition;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -92,7 +93,7 @@ namespace PullToRefreshXaml
 
         #region Events
 
-        //public event EventHandler RefreshRequested;
+        public event RefreshRequestedEventHandler RefreshRequested;
 
         #endregion
 
@@ -322,29 +323,38 @@ namespace PullToRefreshXaml
 
         private async Task StartLoadingAnimationAndRequestRefreshAsync(Action completed)
         {
-            // Create a short delay to allow the expression rotation animation to more smoothly transition
+            // Create a short delay to allow the expression rotation animation to smoothly transition
             // to the new keyframe animation.
             await Task.Delay(100);
 
             _refreshIconVisual.StartAnimation("RotationAngleInDegrees", _loadingAnimation);
 
-            //RefreshRequested?.Invoke(this, EventArgs.Empty);
-
-            try
+            // When using the event...
+            if (RefreshRequested != null)
             {
-                _cts?.Cancel();
-                _cts = new CancellationTokenSource();
-
-                _pendingRefreshTask = DoCancellableRefreshTaskAsync(_cts.Token);
-                await _pendingRefreshTask;
-            }
-            catch (OperationCanceledException)
-            {
+                var e = new RefreshRequestedEventArgs(new DeferralCompletedHandler(completed));
+                RefreshRequested.Invoke(this, e);
             }
 
-            if (_cts != null && !_cts.IsCancellationRequested)
+            // When using the command...
+            if (RefreshCommand != null)
             {
-                completed();
+                try
+                {
+                    _cts?.Cancel();
+                    _cts = new CancellationTokenSource();
+
+                    _pendingRefreshTask = DoCancellableRefreshTaskAsync(_cts.Token);
+                    await _pendingRefreshTask;
+                }
+                catch (OperationCanceledException)
+                {
+                }
+
+                if (_cts != null && !_cts.IsCancellationRequested)
+                {
+                    completed();
+                }
             }
         }
 

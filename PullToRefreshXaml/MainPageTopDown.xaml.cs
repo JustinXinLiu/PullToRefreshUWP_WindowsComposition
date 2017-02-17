@@ -1,7 +1,5 @@
-﻿using System;
-using PullToRefreshXaml.Model;
+﻿using PullToRefreshXaml.Model;
 using System.Collections.ObjectModel;
-using System.Threading;
 using System.Threading.Tasks;
 using Windows.UI.Xaml.Controls;
 
@@ -15,15 +13,15 @@ namespace PullToRefreshXaml
         {
             InitializeComponent();
             ContactsCVS.Source = _list;
-
-            RefreshCommand = new AsyncDelegateCommand<CancellationToken>(async token =>
-            {
-                await Task.Delay(2000, token);
-
-                _list.Insert(0, Contact.GetContactsGrouped(1)[0]);
-            });
         }
 
-        public AsyncDelegateCommand<CancellationToken> RefreshCommand { get; set; }
+        private async void OnRefreshRequested(object sender, RefreshRequestedEventArgs args)
+        {
+            using (args.GetDeferral())
+            {
+                await Task.Delay(3000);
+                _list.Insert(0, Contact.GetContactsGrouped(1)[0]);
+            }
+        }
     }
 }

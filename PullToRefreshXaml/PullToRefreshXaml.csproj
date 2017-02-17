@@ -111,6 +111,8 @@
     <Compile Include="Model\Item.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="PullToRefreshBehavior.cs" />
+    <Compile Include="RefreshRequestedEventArgs.cs" />
+    <Compile Include="RefreshRequestedEventHandler.cs" />
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
