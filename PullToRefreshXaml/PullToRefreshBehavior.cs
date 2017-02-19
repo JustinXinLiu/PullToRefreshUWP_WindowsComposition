@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
-using Windows.ApplicationModel;
 using Windows.Foundation;
 using Windows.UI.Composition;
 using Windows.UI.Xaml;
@@ -20,6 +19,8 @@ namespace PullToRefreshXaml
 
         private ScrollViewer _scrollViewer;
         private Compositor _compositor;
+
+        private const float ScrollViewerMaxOverpanViewportRatio = 0.1f;
 
         private CompositionPropertySet _scrollerViewerManipulation;
         private ExpressionAnimation _rotationAnimation, _opacityAnimation, _offsetAnimation;
@@ -62,12 +63,20 @@ namespace PullToRefreshXaml
         }
         public static readonly DependencyProperty IconElementMaxRotationAngleProperty = DependencyProperty.Register("IconElementMaxRotationAngle", typeof(double), typeof(PullToRefreshBehavior), new PropertyMetadata(400.0d));
 
-        public double PullThreshold
+        public double PullThresholdMaxOverpanRatio
         {
-            get { return (double)GetValue(PullThresholdProperty); }
-            set { SetValue(PullThresholdProperty, value); }
+            get { return (double)GetValue(PullThresholdMaxOverpanRatioProperty); }
+            set { SetValue(PullThresholdMaxOverpanRatioProperty, value); }
         }
-        public static readonly DependencyProperty PullThresholdProperty = DependencyProperty.Register("PullThreshold", typeof(double), typeof(PullToRefreshBehavior), new PropertyMetadata(44.0d));
+        public static readonly DependencyProperty PullThresholdMaxOverpanRatioProperty = DependencyProperty.Register("PullThresholdMaxOverpanRatio", typeof(double), typeof(PullToRefreshBehavior), new PropertyMetadata(0.5d,
+            (s, e) =>
+            {
+                var threshold = (double)e.NewValue;
+                if (threshold <= 0 || threshold > 1)
+                {
+                    throw new ArgumentOutOfRangeException($"{nameof(PullThresholdMaxOverpanRatio)} should be in between 0 and 1");
+                }
+            }));
 
         public AsyncDelegateCommand<CancellationToken> RefreshCommand
         {
@@ -88,6 +97,8 @@ namespace PullToRefreshXaml
 
         private string PullDistanceExpression =>
             $"max(0, {(PullDirection == PullDirection.TopDown ? string.Empty : "-")}ScrollManipulation.Translation.Y{(PullDirection == PullDirection.TopDown ? string.Empty : " -ScrollManipulation.ScrollableHeight")})";
+
+        private string PullThresholdExpression => $"(ScrollManipulation.MaxOverpan * {nameof(PullThresholdMaxOverpanRatio)})";
 
         #endregion
 
@@ -164,13 +175,13 @@ namespace PullToRefreshXaml
             _rotationAnimation.SetReferenceParameter("ScrollManipulation", _scrollerViewerManipulation);
 
             // Create an opacity expression animation based on the overpan distance of the ScrollViewer.
-            _opacityAnimation = _compositor.CreateExpressionAnimation($"min({PullDistanceExpression} / PullThreshold, 1)");
-            _opacityAnimation.SetScalarParameter("PullThreshold", (float)PullThreshold);
-            _opacityAnimation.SetReferenceParameter("ScrollManipulation", _scrollerViewerManipulation);
+            _opacityAnimation = _compositor.CreateExpressionAnimation($"min({PullDistanceExpression} / {PullThresholdExpression}, 1)");
+            _opacityAnimation.SetScalarParameter("PullThresholdMaxOverpanRatio", (float)PullThresholdMaxOverpanRatio);
+            _opacityAnimation.SetReferenceParameter("ScrollManipulation", _scrollerViewerManipulation);           
 
             // Create an offset expression animation based on the overpan distance of the ScrollViewer.
-            _offsetAnimation = _compositor.CreateExpressionAnimation($"(min({PullDistanceExpression} / PullThreshold, 1)) * MaxPulledDistance");
-            _offsetAnimation.SetScalarParameter("PullThreshold", (float)PullThreshold);
+            _offsetAnimation = _compositor.CreateExpressionAnimation($"min({PullDistanceExpression} / {PullThresholdExpression}, 1) * MaxPulledDistance");
+            _offsetAnimation.SetScalarParameter("PullThresholdMaxOverpanRatio", (float)PullThresholdMaxOverpanRatio);
             _offsetAnimation.SetScalarParameter("MaxPulledDistance", IconElementMaxPulledOffsetY);
             _offsetAnimation.SetReferenceParameter("ScrollManipulation", _scrollerViewerManipulation);
 
@@ -397,6 +408,8 @@ namespace PullToRefreshXaml
 
         private void UpdateScrollableHeightInScrollViewerPropertySet()
         {
+            _scrollerViewerManipulation.InsertScalar("MaxOverpan", (float)_scrollViewer.ViewportHeight * ScrollViewerMaxOverpanViewportRatio);
+
             if (PullDirection == PullDirection.BottomUp)
             {
                 _scrollerViewerManipulation.InsertScalar("ScrollableHeight", (float)_scrollViewer.ScrollableHeight);
