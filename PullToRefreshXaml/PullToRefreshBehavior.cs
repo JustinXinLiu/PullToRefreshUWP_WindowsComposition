@@ -158,6 +158,11 @@ namespace PullToRefreshXaml
             _scrollerViewerManipulation = ElementCompositionPreview.GetScrollViewerManipulationPropertySet(_scrollViewer);
             _compositor = _scrollerViewerManipulation.Compositor;
 
+            // Set boundaries.
+            var listViewBaseVisual = ElementCompositionPreview.GetElementVisual(AssociatedObject);
+            var clip = _compositor.CreateInsetClip();
+            listViewBaseVisual.Clip = clip;
+
             // At the moment there are three things happening when pulling down the list -
             // 1. The Refresh Icon fades in.
             // 2. The Refresh Icon rotates (IconElementMaxRotationAngle).
